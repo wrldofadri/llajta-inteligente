@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap, LayersControl } from 'react-leaflet';
 import L from 'leaflet';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import 'leaflet/dist/leaflet.css';
 import logoMap from '../assets/Logo.png';
+import api, { API_URL } from '../api';
 
 // --- GENERADOR DE PINES ---
 const obtenerIcono = (id_categoria) => {
@@ -44,6 +44,7 @@ const DashboardCiudadano = () => {
     
     // NUEVO ESTADO: Controla el filtro del mapa
     const [mostrarSoloMisReportes, setMostrarSoloMisReportes] = useState(false);
+    const [filtroCategoria, setFiltroCategoria] = useState('');
     
     const [vistaActiva, setVistaActiva] = useState('inicio'); 
     const [reporteSeleccionado, setReporteSeleccionado] = useState(null);
@@ -56,11 +57,9 @@ const DashboardCiudadano = () => {
 
     const cargarDatos = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-            const resTodas = await axios.get('http://localhost:3000/api/incidencias/todas', { headers });
+            const resTodas = await api.get('/incidencias/todas');
             setTodasIncidencias(resTodas.data);
-            const resMis = await axios.get('http://localhost:3000/api/incidencias/mis-reportes', { headers });
+            const resMis = await api.get('/incidencias/mis-reportes');
             setMisReportes(resMis.data);
         } catch (error) {
             if(error.response?.status === 401) { localStorage.removeItem('token'); navigate('/auth'); }
@@ -95,6 +94,20 @@ const DashboardCiudadano = () => {
         setEnfocarMapaEn(centroCochabamba);
     };
 
+    const usarMiUbicacion = () => {
+        if (!navigator.geolocation) return Swal.fire('No disponible', 'Tu navegador no permite geolocalizacion.', 'warning');
+        navigator.geolocation.getCurrentPosition(
+            ({ coords }) => {
+                const position = { lat: coords.latitude, lng: coords.longitude };
+                setPosicionNueva(position);
+                setEnfocarMapaEn([position.lat, position.lng]);
+                Swal.fire({ icon: 'success', title: 'Ubicacion detectada', timer: 1200, showConfirmButton: false });
+            },
+            () => Swal.fire('Permiso requerido', 'Permite tu ubicacion o marca el punto manualmente.', 'info'),
+            { enableHighAccuracy: true, timeout: 10000 },
+        );
+    };
+
     const iniciarEdicion = (reporte) => {
         setReporteSeleccionado(reporte); 
         setIdCategoria(reporte.id_categoria);
@@ -117,8 +130,7 @@ const DashboardCiudadano = () => {
         formData.append('foto', foto);
 
         try {
-            const token = localStorage.getItem('token');
-            await axios.post('http://localhost:3000/api/incidencias/registrar', formData, { headers: { 'Authorization': `Bearer ${token}` } });
+            await api.post('/incidencias/registrar', formData);
             Swal.fire({ icon: 'success', title: '¡Enviado!', text: 'Reporte enviado a la central.', timer: 2000, showConfirmButton: false });
             iniciarNuevoReporte(); setVistaActiva('lista'); cargarDatos(); 
         } catch (error) { Swal.fire({ icon: 'error', title: 'Oops...', text: error.response?.data?.error || 'No se pudo enviar', confirmButtonColor: '#38B6FF' }); }
@@ -136,11 +148,10 @@ const DashboardCiudadano = () => {
         if (foto) formData.append('foto', foto);
 
         try {
-            const token = localStorage.getItem('token');
-            await axios.put(`http://localhost:3000/api/incidencias/${reporteSeleccionado.id_incidencia}`, formData, { headers: { 'Authorization': `Bearer ${token}` } });
+            await api.put(`/incidencias/${reporteSeleccionado.id_incidencia}`, formData);
             Swal.fire({ icon: 'success', title: '¡Actualizado!', text: 'El reporte fue corregido exitosamente.', timer: 2000, showConfirmButton: false });
             setPosicionNueva(null); setReporteSeleccionado(null); setVistaActiva('lista'); cargarDatos(); 
-        } catch (error) { Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo actualizar.', confirmButtonColor: '#38B6FF' }); }
+        } catch { Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo actualizar.', confirmButtonColor: '#38B6FF' }); }
     };
 
     const handleCancelar = async (id) => {
@@ -159,8 +170,7 @@ const DashboardCiudadano = () => {
         if (!result.isConfirmed) return;
 
         try {
-            const token = localStorage.getItem('token');
-            await axios.delete(`http://localhost:3000/api/incidencias/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            await api.delete(`/incidencias/${id}`);
             Swal.fire({ icon: 'success', title: 'Eliminado', text: 'El reporte ha sido eliminado.', timer: 2000, showConfirmButton: false });
             
             // LIMPIEZA DE PINES FANTASMAS
@@ -168,7 +178,7 @@ const DashboardCiudadano = () => {
             setReporteSeleccionado(null);
             setVistaActiva('lista'); 
             cargarDatos();
-        } catch (error) { Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo eliminar el reporte.', confirmButtonColor: '#38B6FF' }); }
+        } catch { Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo eliminar el reporte.', confirmButtonColor: '#38B6FF' }); }
     };
 
     const renderizarPanelCentral = () => {
@@ -230,7 +240,7 @@ const DashboardCiudadano = () => {
                         </div>
                         <p style={{ margin: '0 0 25px 0', color: '#334155', fontSize: '1.1rem', lineHeight: '1.7' }}>{rep.descripcion}</p>
                         {rep.foto_reporte && (
-                            <img src={`http://localhost:3000/uploads/${rep.foto_reporte}`} alt="Evidencia" className="foto-evidencia" onClick={() => abrirImagen(`http://localhost:3000/uploads/${rep.foto_reporte}`)} />
+                             <img src={`${API_URL}/uploads/${rep.foto_reporte}`} alt="Evidencia" className="foto-evidencia" onClick={() => abrirImagen(`${API_URL}/uploads/${rep.foto_reporte}`)} />
                         )}
                         {rep.id_estado === 1 && (
                             <div style={{ display: 'flex', gap: '15px', marginTop: '30px' }}>
@@ -253,7 +263,8 @@ const DashboardCiudadano = () => {
                             <div style={{padding: '50px 20px', textAlign:'center', background:'#f8fafc', borderRadius:'24px', border:'2px dashed #cbd5e1', color:'#0f172a'}}>
                                 <h2 style={{fontSize: '4rem', margin: '0 0 15px 0'}}>🗺️</h2>
                                 <h3 style={{margin: '0 0 10px 0', fontSize: '1.4rem'}}>Ubicación del problema</h3>
-                                <p style={{margin: 0, fontWeight: '500', color: '#64748b'}}>Toca en el mapa interactivo de la derecha para establecer el pin.</p>
+                                <p style={{margin: '0 0 18px', fontWeight: '500', color: '#64748b'}}>Usa tu GPS o toca el mapa para establecer el pin.</p>
+                                <button type="button" className="btn-primario" onClick={usarMiUbicacion}>Usar mi ubicacion actual</button>
                             </div>
                         ) : (
                             <form onSubmit={esEdicion ? handleActualizar : handleRegistrar} className="formulario-moderno" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -275,7 +286,7 @@ const DashboardCiudadano = () => {
                                     {foto ? (
                                         <img src={URL.createObjectURL(foto)} alt="Preview" className="foto-preview" onClick={() => abrirImagen(URL.createObjectURL(foto))} />
                                     ) : (esEdicion && reporteSeleccionado?.foto_reporte) ? (
-                                        <img src={`http://localhost:3000/uploads/${reporteSeleccionado.foto_reporte}`} alt="Actual" className="foto-preview" onClick={() => abrirImagen(`http://localhost:3000/uploads/${reporteSeleccionado.foto_reporte}`)} />
+                                        <img src={`${API_URL}/uploads/${reporteSeleccionado.foto_reporte}`} alt="Actual" className="foto-preview" onClick={() => abrirImagen(`${API_URL}/uploads/${reporteSeleccionado.foto_reporte}`)} />
                                     ) : null}
                                     <label className="file-upload-label" style={{marginTop: '15px'}}>
                                         <input type="file" accept="image/*" onChange={(e) => setFoto(e.target.files[0])} required={!esEdicion} />
@@ -296,7 +307,10 @@ const DashboardCiudadano = () => {
     };
 
     // Filtramos qué incidencias se dibujarán en el mapa
-    const incidenciasAMostrar = mostrarSoloMisReportes ? misReportes : todasIncidencias;
+    const baseIncidencias = mostrarSoloMisReportes ? misReportes : todasIncidencias;
+    const incidenciasAMostrar = filtroCategoria
+        ? baseIncidencias.filter((incidencia) => String(incidencia.id_categoria) === filtroCategoria)
+        : baseIncidencias;
 
     return (
         <div className="dashboard-moderno">
@@ -332,6 +346,9 @@ const DashboardCiudadano = () => {
                             <span className="slider"></span>
                         </label>
                         <span style={{ opacity: mostrarSoloMisReportes ? 1 : 0.5, color: mostrarSoloMisReportes ? '#38B6FF' : '#0f172a' }}>👤 Mis Aportes</span>
+                        <select className="filtro-categoria" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} aria-label="Filtrar categoria">
+                            <option value="">Todas</option><option value="1">Basura</option><option value="2">Baches</option><option value="3">Semaforos</option>
+                        </select>
                     </div>
 
                     <MapContainer center={centroCochabamba} zoom={14} style={{ width: '100%', height: '100%', zIndex: 1 }}>

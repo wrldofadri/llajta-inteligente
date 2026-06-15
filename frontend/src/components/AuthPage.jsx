@@ -30,11 +30,14 @@ const AuthPage = () => {
             });
             
             localStorage.setItem('token', respuesta.data.token);
+            localStorage.setItem('usuario', JSON.stringify(respuesta.data.usuario));
             const rolUsuario = respuesta.data.usuario.rol;
             
             if (rolUsuario === 1) navigate('/ciudadano');
+            else if (rolUsuario === 2) navigate('/operador');
             else if (rolUsuario === 3) navigate('/admin');
-            else navigate('/ciudadano');
+            else if (rolUsuario === 4) navigate('/supervisor');
+            else navigate('/auth');
             
         } catch (error) {
             // Modal de Error Moderno

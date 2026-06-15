@@ -4,7 +4,11 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "create-admin": "node scripts/createAdmin.js",
+    "setup-data": "node scripts/setupOperationalData.js",
+    "test:e2e": "node scripts/e2eTest.js",
+    "cleanup:test-data": "node scripts/cleanupTestData.js"
   },
   "keywords": [],
   "author": "",
@@ -17,7 +21,8 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
-    "mysql2": "^3.22.5"
+    "mysql2": "^3.22.5",
+    "pdfkit": "^0.19.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
